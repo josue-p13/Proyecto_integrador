@@ -1,4 +1,4 @@
-from scripts.generar_dataset_espermatozoides import main as generar_dataset_espermatozoides
+from scripts.generar_dataset_espermatozoides import generar_datos as generar_dataset_espermatozoides
 from scripts.generar_dataset_rps import generar_datos as generar_dataset_rps
 
 def main():
