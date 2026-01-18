@@ -8,7 +8,7 @@
 * Bryan Gonzales
 * Jhon Cordova
 * Pablo Paucar
-
+* Eric Ponce (Coordinador)
 ---
 
 ## 📝 Descripción del Proyecto
