@@ -1,76 +1,77 @@
-import kagglehub
-import os
 import cv2
 import numpy as np
-import random
-import shutil
 
-# Configuracion inicial
-SEED = 42
-random.seed(SEED)
-NUM_IMAGENES = 100  
+def procesar_resta_canales(img, size=(256, 256)):
+    """
+    Segmenta la mano en imágenes de Piedra-Papel-Tijera (fondo verde)
+    usando resta aritmética de canales (Verde - Rojo).
 
-BASE_DIR = os.getcwd()
+    Parámetros
+    ----------
+    img : np.ndarray
+        Imagen original en formato BGR.
+    size : tuple
+        Tamaño de salida (width, height).
 
-# 1. Descarga del Dataset
-print("Verificando/Descargando dataset...")
-try:
-    path_origen = kagglehub.dataset_download("drgfreeman/rockpaperscissors")
-    print(f"Dataset ubicado en: {path_origen}")
-except Exception as e:
-    print(f"Error descargando dataset: {e}")
-    exit()
+    Retorna
+    -------
+    mascara_final : np.ndarray
+        Máscara binaria con la mano segmentada (255) y fondo negro (0).
+        Retorna None si la imagen está vacía.
+    """
 
-# 2. Localizar carpetas originales
-carpetas_encontradas = []
-for root, dirs, _ in os.walk(path_origen):
-    candidatos = [d for d in dirs if d.lower() in ["rock", "paper", "scissors"]]
-    if len(candidatos) >= 2:
-        ruta_base_dataset = root
-        carpetas_encontradas = candidatos
-        break
+    if img is None:
+        return None
 
-if not carpetas_encontradas:
-    print("Error: No se encontraron las carpetas del dataset.")
-    exit()
+    # --- A. Redimensionar ---
+    # Estandarizamos el tamaño para que los kernels funcionen igual siempre
+    img_resized = cv2.resize(img, size)
 
-# Funcion de procesamiento
-def procesar_resta_canales(img):
-    if img is None: return None
+    # --- B. Separación de Canales ---
+    b, g, r = cv2.split(img_resized)
 
-    img = cv2.resize(img, (256, 256))
-
-    # Separacion de Canales
-    b, g, r = cv2.split(img)
-
-    # Resta de Canales (Verde - Rojo)
-    # El fondo verde tiene G alto, la piel tiene R alto.
-    # Al restar G - R, el fondo se mantiene brillante y la mano se oscurece.
+    # --- C. Aritmética de Canales (La clave del algoritmo) ---
+    # El fondo verde tiene G alto y R bajo. La piel tiene R alto.
+    # Restar (G - R) hace que el fondo brille y la mano se oscurezca.
     diferencia = cv2.subtract(g, r)
 
-    # Filtrado para reducir ruido de camara
+    # --- D. Filtrado Espacial ---
+    # Suavizado para eliminar el ruido granulado de la cámara
     suave = cv2.GaussianBlur(diferencia, (5, 5), 0)
 
-    # Otsu para segmentar automaticamente fondo vs mano
+    # --- E. Umbralización de Otsu ---
+    # Separa automáticamente el fondo (claro) de la mano (oscura)
     _, binaria = cv2.threshold(suave, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
-    # Invertir para tener mano blanca sobre fondo negro
+    # --- F. Inversión ---
+    # Queremos la mano blanca (255) y el fondo negro (0)
     binaria = cv2.bitwise_not(binaria)
 
-    # Apertura morfologica para eliminar ruido pequeño
-    kernel = np.ones((5,5), np.uint8)
+    # --- G. Limpieza Morfológica ---
+    # Apertura para eliminar puntitos blancos del fondo
+    kernel = np.ones((5, 5), np.uint8)
     binaria = cv2.morphologyEx(binaria, cv2.MORPH_OPEN, kernel)
 
-    # Conservar solo el componente conectado mas grande (la mano)
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binaria, connectivity=8)
+    # --- H. Selección del Componente Principal ---
+    # Nos quedamos solo con la mancha blanca más grande (la mano)
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
+        binaria, 
+        connectivity=8
+    )
 
     mascara_final = np.zeros_like(binaria)
+    
     if num_labels > 1:
-        # stats[1:] ignora el fondo (indice 0)
+        # stats[1:] ignora el fondo (índice 0)
         areas = stats[1:, cv2.CC_STAT_AREA]
-        idx_mayor = np.argmax(areas) + 1
+        
+        # Buscamos el índice del área máxima
+        idx_mayor = np.argmax(areas) + 1 
+        
+        # Pintamos solo ese componente
         mascara_final[labels == idx_mayor] = 255
     else:
+        # Si no encontró nada, devolvemos lo que haya
         mascara_final = binaria
 
     return mascara_final
