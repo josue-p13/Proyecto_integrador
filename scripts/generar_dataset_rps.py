@@ -4,14 +4,15 @@ import cv2
 import kagglehub
 import shutil
 from tqdm import tqdm
-from src.preprocesamiento.rps import procesar_resta_canales
+from src.preprocesamiento.rps import procesar_rps_gris
 
 def generar_datos():
-    SEED = 42
+    SEED = 42 # Semilla
     random.seed(SEED)
-
     NUM_MUESTRAS = 100  
-    RUTA_SALIDA = "datos_procesados/piedra_papel_tijera"
+    
+    BASE_DIR = os.getcwd()
+    RUTA_SALIDA = os.path.join(BASE_DIR, "datos_procesados", "piedra_papel_tijera")
     EXT_VALIDAS = (".png", ".jpg", ".jpeg")
     
     TRADUCCION = {
@@ -20,6 +21,13 @@ def generar_datos():
         'scissors': 'tijeras'
     }
 
+    # ================= EJECUCIÓN =================
+    # 1. Limpiar carpeta anterior
+    if os.path.exists(RUTA_SALIDA):
+        print(f"🧹 Limpiando carpeta de salida: {RUTA_SALIDA}")
+        shutil.rmtree(RUTA_SALIDA)
+
+    # 2. Descargar Dataset
     print("Descargando dataset Rock-Paper-Scissors...")
     try:
         path_origen = kagglehub.dataset_download("drgfreeman/rockpaperscissors")
@@ -27,61 +35,56 @@ def generar_datos():
         print(f"Error descargando: {e}")
         return
 
-    ruta_base = ""
-    clases_encontradas = []
+    # 3. Buscar las carpetas correctas
+    ruta_base_img = ""
+    carpetas_encontradas = []
 
     for root, dirs, _ in os.walk(path_origen):
         candidatos = [d for d in dirs if d.lower() in ["rock", "paper", "scissors"]]
         if len(candidatos) >= 2:
-            ruta_base = root
-            clases_encontradas = candidatos
+            ruta_base_img = root
+            carpetas_encontradas = candidatos
             break
+    
+    if not carpetas_encontradas:
+        print("No se encontraron las carpetas de imágenes.")
+        return
 
-    if not clases_encontradas:
-        print("No se encontraron las carpetas del dataset.")
-        return 
-
-    print(f"Clases encontradas: {clases_encontradas}")
-
-    if os.path.exists(RUTA_SALIDA):
-        shutil.rmtree(RUTA_SALIDA)
-
-    print("\nGenerando dataset procesado...")
-
-    for clase_ingles in clases_encontradas:
+    print(f"Carpetas encontradas: {carpetas_encontradas}")
+    print("\nIniciando procesamiento (Solo Grises + Limpieza)...")
+    # 4. Procesar cada clase
+    for clase_ingles in carpetas_encontradas:
         nombre_espanol = TRADUCCION.get(clase_ingles.lower(), clase_ingles)
         
-        path_clase_in = os.path.join(ruta_base, clase_ingles)
-        salida_clase = os.path.join(RUTA_SALIDA, nombre_espanol)
+        dir_entrada = os.path.join(ruta_base_img, clase_ingles)
+        dir_salida = os.path.join(RUTA_SALIDA, nombre_espanol)
         
-        os.makedirs(salida_clase, exist_ok=True)
+        os.makedirs(dir_salida, exist_ok=True)
 
-        archivos = [
-            f for f in os.listdir(path_clase_in)
-            if os.path.splitext(f)[1].lower() in EXT_VALIDAS
-        ]
-
-        if not archivos:
-            print(f"No hay imagenes validas en: {path_clase_in}")
-            continue
-
+        # Listar imágenes
+        archivos = [f for f in os.listdir(dir_entrada) if f.lower().endswith(EXT_VALIDAS)]
+        
+        # Seleccionar muestras
         archivos = sorted(archivos)
-        muestras = random.sample(archivos, k=min(NUM_MUESTRAS, len(archivos)))
+        cantidad = len(archivos) if NUM_MUESTRAS == -1 else min(NUM_MUESTRAS, len(archivos))
+        muestras = random.sample(archivos, k=cantidad)
+        
+        print(f"   -> Procesando '{nombre_espanol}': {cantidad} imágenes...")
 
-        print(f"Procesando: {nombre_espanol} ({len(muestras)} imagenes)")
+        for nombre_archivo in tqdm(muestras):
+            ruta_completa = os.path.join(dir_entrada, nombre_archivo)
+            
+            # Leer
+            img_original = cv2.imread(ruta_completa)
+            
+            # Procesar
+            img_procesada = procesar_rps_gris(img_original)
+            
+            # Guardar
+            if img_procesada is not None:
+                cv2.imwrite(os.path.join(dir_salida, nombre_archivo), img_procesada)
 
-        for nombre in tqdm(muestras):
-            ruta_img = os.path.join(path_clase_in, nombre)
-            img = cv2.imread(ruta_img)
-
-            if img is None: continue
-
-            mascara = procesar_resta_canales(img)
-
-            if mascara is not None:
-                ruta_final = os.path.join(salida_clase, nombre)
-                cv2.imwrite(ruta_final, mascara)
-
-    print("\nDataset RPS generado correctamente.")
-    print(f"Ubicacion: {os.path.abspath(RUTA_SALIDA)}")
+    print("\n" + "="*50)
+    print(f"Imágenes guardadas en:\n -> {RUTA_SALIDA}")
+    print("="*50)
 
