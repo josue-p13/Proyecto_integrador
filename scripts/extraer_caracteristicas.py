@@ -169,39 +169,51 @@ def extraer_caracteristicas_dataset(ruta_imagenes_bin, ruta_salida_csv, nombre_d
     print(f"\nExtraccion completada para {nombre_dataset}")
     print(f"Archivos guardados en: {os.path.abspath(ruta_salida_csv)}")
     
+
 def guardar_dataset_sift_csv(ruta_dataset, archivo_csv, hessian_threshold=400):
-    surf = crear_sift(hessian_threshold)
+    sift = crear_sift(hessian_threshold)
 
     filas = []
 
-    for clase in os.listdir(ruta_dataset):
-        print(clase)
+    clases = [
+        c for c in os.listdir(ruta_dataset)
+        if os.path.isdir(os.path.join(ruta_dataset, c))
+    ]
+
+    for clase in tqdm(clases, desc="Procesando clases"):
         ruta_clase = os.path.join(ruta_dataset, clase)
 
-        if not os.path.isdir(ruta_clase):
-            continue
-        
-        for imagen in os.listdir(ruta_clase):
-            if imagen.lower().endswith(('.jpg', '.png', '.jpeg','.bmp')):
-                ruta_imagen = os.path.join(ruta_clase, imagen)
+        imagenes = [
+            img for img in os.listdir(ruta_clase)
+            if img.lower().endswith(('.jpg', '.png', '.jpeg', '.bmp'))
+        ]
 
-                try:
-                    descriptores = extraer_descriptores_imagen(
-                        ruta_imagen, surf
-                    )
+        for imagen in tqdm(imagenes, desc=f"Clase: {clase}", leave=False):
+            ruta_imagen = os.path.join(ruta_clase, imagen)
 
-                    vector = resumir_descriptores(descriptores)
-                    fila = list(vector) + [clase]
-                    filas.append(fila)
+            try:
+                descriptores = extraer_descriptores_imagen(
+                    ruta_imagen, sift
+                )
 
-                except Exception as e:
-                    print(e)
+                vector = resumir_descriptores(descriptores)
+                fila = list(vector) + [clase]
+                filas.append(fila)
+
+            except Exception as e:
+                print(e)
 
     columnas = [f"f{i}" for i in range(len(filas[0]) - 1)] + ["label"]
     df = pd.DataFrame(filas, columns=columnas)
 
-    df.to_csv(archivo_csv, index=False)
-    print(f"Dataset guardado en {archivo_csv}")
+    # ✅ CREAR DIRECTORIO SI NO EXISTE
+    directorio_salida = os.path.dirname(archivo_csv)
+    if directorio_salida:
+        os.makedirs(directorio_salida, exist_ok=True)
+
+    # Guardar CSV
+    df.to_csv(archivo_csv + ".csv", index=False)
+    print(f"\nDataset guardado en {archivo_csv}.csv")
 
 
 
@@ -240,7 +252,14 @@ def extraer_todas_caracteristicas():
         ruta_salida_csv="caracteristicas_extraidas/momentos/piedra_papel_tijera",
         nombre_dataset="piedra-papel-tijera"
     )
-
+    guardar_dataset_sift_csv(
+        ruta_dataset="datos_procesados/espermatozoides",
+        archivo_csv="caracteristicas_extraidas/sift/espermatozoides-sift",
+    )
+    guardar_dataset_sift_csv(
+        ruta_dataset="datos_procesados/piedra_papel_tijera",
+        archivo_csv="caracteristicas_extraidas/sift/piedra-papel-tijera-sift",
+    )
 
 if __name__ == "__main__":
     extraer_todas_caracteristicas()
