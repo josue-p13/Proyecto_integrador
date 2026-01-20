@@ -4,3 +4,4 @@ tqdm
 kagglehub
 mahotas
 pandas
+scikit-image
