@@ -1,5 +1,18 @@
-# Datos generados
+# Datos procesados y caracteristicas extraidas
 datos_procesados/
+caracteristicas_extraidas/
+
+# Datasets descargados (kagglehub)
+*.csv
+*.png
+*.jpg
+*.jpeg
+*.bmp
+
+# Permitir solo los archivos de codigo fuente
+!src/**/*.py
+!scripts/**/*.py
+!*.py
 
 # Python
 __pycache__/
@@ -8,6 +21,15 @@ __pycache__/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
 
 # Entornos virtuales
 .venv/
@@ -19,6 +41,15 @@ env/
 .vscode/
 !.vscode/settings.json
 
+# PyCharm
+.idea/
+
 # SO
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
+*.log

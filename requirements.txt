@@ -2,3 +2,6 @@ numpy
 opencv-python
 tqdm
 kagglehub
+mahotas
+mahotas
+pandas
