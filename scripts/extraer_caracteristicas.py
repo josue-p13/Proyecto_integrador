@@ -3,11 +3,12 @@ import csv
 import cv2
 import numpy as np
 from tqdm import tqdm
-
+import pandas as pd
 from src.extraccion_caracteristicas.momentos.momentos import calcular_momentos
 from src.extraccion_caracteristicas.momentos.hu import calcular_hu_momentos
 from src.extraccion_caracteristicas.momentos.zernike import calcular_zernike_momentos
 from src.extraccion_caracteristicas.momentos.binarizacion import binarizar_imagen
+from src.extraccion_caracteristicas.SIFT.SIFT import crear_sift, extraer_descriptores_imagen, resumir_descriptores
 
 
 def escalar_logaritmicamente(datos):
@@ -167,6 +168,41 @@ def extraer_caracteristicas_dataset(ruta_imagenes_bin, ruta_salida_csv, nombre_d
     
     print(f"\nExtraccion completada para {nombre_dataset}")
     print(f"Archivos guardados en: {os.path.abspath(ruta_salida_csv)}")
+    
+def guardar_dataset_sift_csv(ruta_dataset, archivo_csv, hessian_threshold=400):
+    surf = crear_sift(hessian_threshold)
+
+    filas = []
+
+    for clase in os.listdir(ruta_dataset):
+        print(clase)
+        ruta_clase = os.path.join(ruta_dataset, clase)
+
+        if not os.path.isdir(ruta_clase):
+            continue
+        
+        for imagen in os.listdir(ruta_clase):
+            if imagen.lower().endswith(('.jpg', '.png', '.jpeg','.bmp')):
+                ruta_imagen = os.path.join(ruta_clase, imagen)
+
+                try:
+                    descriptores = extraer_descriptores_imagen(
+                        ruta_imagen, surf
+                    )
+
+                    vector = resumir_descriptores(descriptores)
+                    fila = list(vector) + [clase]
+                    filas.append(fila)
+
+                except Exception as e:
+                    print(e)
+
+    columnas = [f"f{i}" for i in range(len(filas[0]) - 1)] + ["label"]
+    df = pd.DataFrame(filas, columns=columnas)
+
+    df.to_csv(archivo_csv, index=False)
+    print(f"Dataset guardado en {archivo_csv}")
+
 
 
 def extraer_todas_caracteristicas():
