@@ -9,6 +9,8 @@ from src.extraccion_caracteristicas.momentos.hu import calcular_hu_momentos
 from src.extraccion_caracteristicas.momentos.zernike import calcular_zernike_momentos
 from src.extraccion_caracteristicas.momentos.binarizacion import binarizar_imagen
 from src.extraccion_caracteristicas.SIFT.SIFT import crear_sift, extraer_descriptores_imagen, resumir_descriptores
+from src.extraccion_caracteristicas.HOG.HOG import extraer_hog_imagen
+
 
 
 def escalar_logaritmicamente(datos):
@@ -216,6 +218,47 @@ def guardar_dataset_sift_csv(ruta_dataset, archivo_csv, hessian_threshold=400):
     print(f"\nDataset guardado en {archivo_csv}.csv")
 
 
+def guardar_dataset_hog_csv(
+    ruta_dataset,
+    archivo_csv,
+    resize=(128, 64)
+):
+    filas = []
+
+    clases = [
+        c for c in os.listdir(ruta_dataset)
+        if os.path.isdir(os.path.join(ruta_dataset, c))
+    ]
+
+    for clase in tqdm(clases, desc="Procesando clases"):
+        ruta_clase = os.path.join(ruta_dataset, clase)
+
+        imagenes = [
+            img for img in os.listdir(ruta_clase)
+            if img.lower().endswith(('.jpg', '.png', '.jpeg', '.bmp'))
+        ]
+
+        for imagen in tqdm(imagenes, desc=f"Clase: {clase}", leave=False):
+            ruta_imagen = os.path.join(ruta_clase, imagen)
+
+            try:
+                vector = extraer_hog_imagen(ruta_imagen, resize)
+                fila = list(vector) + [clase]
+                filas.append(fila)
+
+            except Exception as e:
+                print(e)
+
+    columnas = [f"f{i}" for i in range(len(filas[0]) - 1)] + ["label"]
+    df = pd.DataFrame(filas, columns=columnas)
+
+    # Crear directorio si no existe
+    directorio_salida = os.path.dirname(archivo_csv)
+    if directorio_salida:
+        os.makedirs(directorio_salida, exist_ok=True)
+
+    df.to_csv(archivo_csv + ".csv", index=False)
+    print(f"\nDataset HOG guardado en {archivo_csv}.csv")
 
 def extraer_todas_caracteristicas():
     """
@@ -260,6 +303,14 @@ def extraer_todas_caracteristicas():
         ruta_dataset="datos_procesados/piedra_papel_tijera",
         archivo_csv="caracteristicas_extraidas/sift/piedra-papel-tijera-sift",
     )
+    guardar_dataset_hog_csv(
+        ruta_dataset="datos_procesados/espermatozoides",
+        archivo_csv="caracteristicas_extraidas/hog/espermatozoides-hog"
+    )
 
+    guardar_dataset_hog_csv(
+        ruta_dataset="datos_procesados/piedra_papel_tijera",
+        archivo_csv="caracteristicas_extraidas/hog/piedra-papel-tijera-hog"
+    )
 if __name__ == "__main__":
     extraer_todas_caracteristicas()
