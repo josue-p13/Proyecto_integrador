@@ -9,23 +9,18 @@ caracteristicas_extraidas/
 *.jpeg
 *.bmp
 
-# Permitir solo los archivos de codigo fuente
-!src/**/*.py
-!scripts/**/*.py
-!*.py
-
 # Python
 __pycache__/
 *.py[cod]
 *.pyd
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
 *.so
 *.egg
 *.egg-info/
 dist/
 build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Jupyter Notebooks
 .ipynb_checkpoints/

@@ -7,49 +7,47 @@ from tqdm import tqdm
 from src.extraccion_caracteristicas.momentos.momentos import calcular_momentos
 from src.extraccion_caracteristicas.momentos.hu import calcular_hu_momentos
 from src.extraccion_caracteristicas.momentos.zernike import calcular_zernike_momentos
+from src.extraccion_caracteristicas.momentos.binarizacion import binarizar_imagen
 
 
-def aplicar_escala_logaritmica(datos):
+def escalar_logaritmicamente(datos):
     """
-    Aplica escala logaritmica a todos los valores numericos.
+    Aplica escala logaritmica a todos los valores numericos de un diccionario.
     
-    Maneja valores positivos, negativos y ceros usando la formula:
-    sign(x) * log(abs(x) + 1)
+    Usa log10(abs(x) + 1) para manejar valores negativos y ceros.
+    Preserva el signo del valor original.
     
     Parametros:
-        datos: Lista de diccionarios con los datos
+        datos: Diccionario con valores numericos
         
     Retorna:
-        list: Lista de diccionarios con valores escalados logaritmicamente
+        dict: Diccionario con valores escalados logaritmicamente
     """
-    datos_escalados = []
-    
-    for fila in datos:
-        fila_escalada = {}
-        for key, value in fila.items():
-            if key == 'clase':
-                fila_escalada[key] = value
+    datos_escalados = {}
+    for key, value in datos.items():
+        if isinstance(value, (int, float)):
+            if value == 0:
+                datos_escalados[key] = 0.0
             else:
-                fila_escalada[key] = np.sign(value) * np.log(np.abs(value) + 1)
-        datos_escalados.append(fila_escalada)
-    
+                signo = np.sign(value)
+                datos_escalados[key] = signo * np.log10(abs(value) + 1)
+        else:
+            datos_escalados[key] = value
     return datos_escalados
 
 
-def extraer_caracteristicas_dataset(ruta_imagenes, ruta_salida, nombre_dataset):
+def binarizar_dataset(ruta_imagenes, ruta_salida_bin, nombre_dataset):
     """
-    Extrae momentos, Hu y Zernike de todas las imagenes de un dataset.
+    Binariza todas las imagenes de un dataset y las guarda.
     
-    Procesa cada clase del dataset, calcula los tres tipos de momentos
-    y guarda los resultados en archivos CSV separados.
+    Lee imagenes procesadas, aplica binarizacion de Otsu y guarda
+    las imagenes binarizadas manteniendo la estructura de carpetas.
     
     Parametros:
         ruta_imagenes: Ruta donde estan las carpetas con imagenes por clase
-        ruta_salida: Ruta donde se guardaran los archivos CSV
-        nombre_dataset: Nombre del dataset para mensajes (ej: 'espermatozoides')
+        ruta_salida_bin: Ruta donde se guardaran las imagenes binarizadas
+        nombre_dataset: Nombre del dataset para mensajes
     """
-    os.makedirs(ruta_salida, exist_ok=True)
-    
     clases = [d for d in os.listdir(ruta_imagenes) 
               if os.path.isdir(os.path.join(ruta_imagenes, d))]
     
@@ -57,6 +55,57 @@ def extraer_caracteristicas_dataset(ruta_imagenes, ruta_salida, nombre_dataset):
         print(f"No se encontraron clases en {ruta_imagenes}")
         return
     
+    print(f"Binarizando {nombre_dataset}...")
+    print(f"Clases: {clases}")
+    
+    for clase in clases:
+        ruta_clase_in = os.path.join(ruta_imagenes, clase)
+        ruta_clase_out = os.path.join(ruta_salida_bin, clase)
+        os.makedirs(ruta_clase_out, exist_ok=True)
+        
+        archivos = [f for f in os.listdir(ruta_clase_in) 
+                   if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
+        
+        print(f"\nBinarizando clase: {clase} ({len(archivos)} imagenes)")
+        
+        for archivo in tqdm(archivos):
+            ruta_img = os.path.join(ruta_clase_in, archivo)
+            img = cv2.imread(ruta_img)
+            
+            if img is None:
+                continue
+            
+            img_bin = binarizar_imagen(img, metodo='otsu')
+            
+            if img_bin is not None:
+                ruta_salida = os.path.join(ruta_clase_out, archivo)
+                cv2.imwrite(ruta_salida, img_bin)
+    
+    print(f"Binarizacion completada. Guardado en: {os.path.abspath(ruta_salida_bin)}")
+
+
+def extraer_caracteristicas_dataset(ruta_imagenes_bin, ruta_salida_csv, nombre_dataset):
+    """
+    Extrae momentos, Hu y Zernike de imagenes binarizadas.
+    
+    Lee imagenes binarizadas, calcula los tres tipos de momentos
+    aplicando escala logaritmica y guarda los resultados en CSV.
+    
+    Parametros:
+        ruta_imagenes_bin: Ruta donde estan las imagenes binarizadas
+        ruta_salida_csv: Ruta donde se guardaran los archivos CSV
+        nombre_dataset: Nombre del dataset para mensajes
+    """
+    os.makedirs(ruta_salida_csv, exist_ok=True)
+    
+    clases = [d for d in os.listdir(ruta_imagenes_bin) 
+              if os.path.isdir(os.path.join(ruta_imagenes_bin, d))]
+    
+    if not clases:
+        print(f"No se encontraron clases en {ruta_imagenes_bin}")
+        return
+    
+    print(f"\nExtrayendo caracteristicas de {nombre_dataset}...")
     print(f"Clases encontradas: {clases}")
     
     datos_momentos = []
@@ -64,7 +113,7 @@ def extraer_caracteristicas_dataset(ruta_imagenes, ruta_salida, nombre_dataset):
     datos_zernike = []
     
     for clase in clases:
-        ruta_clase = os.path.join(ruta_imagenes, clase)
+        ruta_clase = os.path.join(ruta_imagenes_bin, clase)
         archivos = [f for f in os.listdir(ruta_clase) 
                    if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
         
@@ -72,76 +121,87 @@ def extraer_caracteristicas_dataset(ruta_imagenes, ruta_salida, nombre_dataset):
         
         for archivo in tqdm(archivos):
             ruta_img = os.path.join(ruta_clase, archivo)
-            img = cv2.imread(ruta_img, cv2.IMREAD_GRAYSCALE)
+            img_bin = cv2.imread(ruta_img, cv2.IMREAD_GRAYSCALE)
             
-            if img is None:
+            if img_bin is None:
                 continue
             
-            _, img_bin = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY)
-            
             momentos_reg = calcular_momentos(img_bin)
+            momentos_reg = escalar_logaritmicamente(momentos_reg)
             momentos_reg['clase'] = clase
             datos_momentos.append(momentos_reg)
             
             hu = calcular_hu_momentos(img_bin)
+            hu = escalar_logaritmicamente(hu)
             hu['clase'] = clase
             datos_hu.append(hu)
             
             zernike = calcular_zernike_momentos(img_bin)
             if zernike:
+                zernike = escalar_logaritmicamente(zernike)
                 zernike['clase'] = clase
                 datos_zernike.append(zernike)
     
-    print("\nAplicando escala logaritmica...")
-    datos_momentos = aplicar_escala_logaritmica(datos_momentos)
-    datos_hu = aplicar_escala_logaritmica(datos_hu)
-    datos_zernike = aplicar_escala_logaritmica(datos_zernike)
-    
-    print("Guardando archivos CSV...")
+    print("\nGuardando archivos CSV...")
     
     if datos_momentos:
-        with open(os.path.join(ruta_salida, 'momentos.csv'), 'w', newline='', encoding='utf-8') as f:
+        with open(os.path.join(ruta_salida_csv, 'momentos.csv'), 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=datos_momentos[0].keys())
             writer.writeheader()
             writer.writerows(datos_momentos)
         print(f"{len(datos_momentos)} filas guardadas en momentos.csv")
     
     if datos_hu:
-        with open(os.path.join(ruta_salida, 'hu_momentos.csv'), 'w', newline='', encoding='utf-8') as f:
+        with open(os.path.join(ruta_salida_csv, 'hu_momentos.csv'), 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=datos_hu[0].keys())
             writer.writeheader()
             writer.writerows(datos_hu)
         print(f"{len(datos_hu)} filas guardadas en hu_momentos.csv")
     
     if datos_zernike:
-        with open(os.path.join(ruta_salida, 'zernike.csv'), 'w', newline='', encoding='utf-8') as f:
+        with open(os.path.join(ruta_salida_csv, 'zernike.csv'), 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=datos_zernike[0].keys())
             writer.writeheader()
             writer.writerows(datos_zernike)
         print(f"{len(datos_zernike)} filas guardadas en zernike.csv")
     
     print(f"\nExtraccion completada para {nombre_dataset}")
-    print(f"Archivos guardados en: {os.path.abspath(ruta_salida)}")
+    print(f"Archivos guardados en: {os.path.abspath(ruta_salida_csv)}")
 
 
 def extraer_todas_caracteristicas():
     """
     Funcion principal que extrae caracteristicas de ambos datasets.
     
-    Procesa espermatozoides y piedra-papel-tijera, extrayendo momentos,
-    Hu y Zernike de cada uno y guardando en sus respectivas carpetas.
+    Primero binariza las imagenes procesadas y las guarda.
+    Luego extrae momentos, Hu y Zernike de las imagenes binarizadas
+    aplicando escala logaritmica antes de guardar en CSV.
     """
-    print("\n--- EXTRAYENDO CARACTERISTICAS: ESPERMATOZOIDES ---")
-    extraer_caracteristicas_dataset(
+    print("\n--- PASO 1: BINARIZANDO IMAGENES ---")
+    
+    binarizar_dataset(
         ruta_imagenes="datos_procesados/espermatozoides",
-        ruta_salida="caracteristicas_extraidas/momentos/espermatozoides",
+        ruta_salida_bin="caracteristicas_extraidas/momentos/binarizacion/espermatozoides",
         nombre_dataset="espermatozoides"
     )
     
-    print("\n--- EXTRAYENDO CARACTERISTICAS: PIEDRA-PAPEL-TIJERA ---")
-    extraer_caracteristicas_dataset(
+    binarizar_dataset(
         ruta_imagenes="datos_procesados/piedra_papel_tijera",
-        ruta_salida="caracteristicas_extraidas/momentos/piedra_papel_tijera",
+        ruta_salida_bin="caracteristicas_extraidas/momentos/binarizacion/piedra_papel_tijera",
+        nombre_dataset="piedra-papel-tijera"
+    )
+    
+    print("\n--- PASO 2: EXTRAYENDO CARACTERISTICAS ---")
+    
+    extraer_caracteristicas_dataset(
+        ruta_imagenes_bin="caracteristicas_extraidas/momentos/binarizacion/espermatozoides",
+        ruta_salida_csv="caracteristicas_extraidas/momentos/espermatozoides",
+        nombre_dataset="espermatozoides"
+    )
+    
+    extraer_caracteristicas_dataset(
+        ruta_imagenes_bin="caracteristicas_extraidas/momentos/binarizacion/piedra_papel_tijera",
+        ruta_salida_csv="caracteristicas_extraidas/momentos/piedra_papel_tijera",
         nombre_dataset="piedra-papel-tijera"
     )
 
