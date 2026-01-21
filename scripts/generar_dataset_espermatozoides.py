@@ -4,18 +4,26 @@ import cv2
 import kagglehub
 from tqdm import tqdm
 
-from src.preprocesamiento.espermatozoides import procesar_imagen_sperm as procesar_imagen_espermatozoide
+from src.preprocesamiento.espermatozoides import (
+    procesar_imagen_sperm,
+    procesar_imagen_sperm_bin,
+)
+
 def generar_datos():
     # ---------------- CONFIGURACIÓN ----------------
     SEED = 56
     random.seed(SEED)
 
     NUM_MUESTRAS = 100  # <-- máximo de imágenes a procesar por clase
-    RUTA_SALIDA = "datos_procesados/espermatozoides"
+    RUTA_SALIDA_BASE = "datos_procesados"
     EXT_VALIDAS = (".bmp", ".jpg", ".jpeg", ".png")
+    PROCESADORES = (
+        ("espermatozoides", procesar_imagen_sperm),
+        ("espermatozoides_binarizados", procesar_imagen_sperm_bin),
+    )
 
     # ---------------- DESCARGA DATASET ----------------
-    print("⬇️ Descargando dataset de espermatozoides...")
+    print("⬇Descargando dataset de espermatozoides...")
     path_origen = kagglehub.dataset_download(
         "orvile/sperm-morphology-image-data-set-smids"
     )
@@ -32,50 +40,65 @@ def generar_datos():
             break
 
     if not clases:
-        raise RuntimeError("❌ No se encontraron las carpetas del dataset.")
+        raise RuntimeError("No se encontraron las carpetas del dataset.")
 
-    print(f"✅ Clases encontradas: {clases}")
+    print(f"Clases encontradas: {clases}")
 
     # ---------------- CREAR ESTRUCTURA DE SALIDA ----------------
-    for clase in clases:
-        os.makedirs(os.path.join(RUTA_SALIDA, clase), exist_ok=True)
+    for nombre_tipo, _ in PROCESADORES:
+        for clase in clases:
+            os.makedirs(os.path.join(RUTA_SALIDA_BASE, nombre_tipo, clase), exist_ok=True)
 
-    # ---------------- PROCESAMIENTO Y GUARDADO ----------------
-    print("\n🧪 Generando dataset procesado...")
-
+    muestras_por_clase = {}
     for clase in clases:
         path_clase = os.path.join(ruta_base, clase)
-        salida_clase = os.path.join(RUTA_SALIDA, clase)
-
         archivos = [
             f for f in os.listdir(path_clase)
             if os.path.splitext(f)[1].lower() in EXT_VALIDAS
         ]
 
         if not archivos:
-            print(f"⚠️ No hay imágenes válidas en: {path_clase}")
+            print(f"No hay imágenes válidas en: {path_clase}")
             continue
 
-        # Muestreo reproducible (siempre mismas 100 con la misma semilla)
-        archivos = sorted(archivos)  # estabiliza el muestreo entre PCs
+        archivos = sorted(archivos)
         muestras = random.sample(archivos, k=min(NUM_MUESTRAS, len(archivos)))
+        muestras_por_clase[clase] = {
+            "muestras": muestras,
+            "total": len(archivos)
+        }
 
-        print(f"Procesando clase: {clase} ({len(muestras)} de {len(archivos)} imágenes)")
+    if not muestras_por_clase:
+        raise RuntimeError("No se pudo construir ninguna muestra procesable para las clases encontradas.")
 
-        for nombre in tqdm(muestras):
-            ruta_img = os.path.join(path_clase, nombre)
-            img = cv2.imread(ruta_img)
+    # ---------------- PROCESAMIENTO Y GUARDADO ----------------
+    print("\nGenerando dataset procesado...")
 
-            if img is None:
-                continue
+    for nombre_tipo, procesar in PROCESADORES:
+        print(f"\nProcesando conjunto: {nombre_tipo}")
+        for clase, datos in muestras_por_clase.items():
+            path_clase = os.path.join(ruta_base, clase)
+            salida_clase = os.path.join(RUTA_SALIDA_BASE, nombre_tipo, clase)
+            muestras = datos["muestras"]
+            total_archivos = datos["total"]
 
-            _, mascara = procesar_imagen_espermatozoide(img)
+            print(f"Procesando clase: {clase} ({len(muestras)} de {total_archivos} imágenes)")
 
-            if mascara is None:
-                continue
+            for nombre in tqdm(muestras):
+                ruta_img = os.path.join(path_clase, nombre)
+                img = cv2.imread(ruta_img)
 
-            ruta_salida = os.path.join(salida_clase, nombre)
-            cv2.imwrite(ruta_salida, mascara)
+                if img is None:
+                    continue
 
-    print("\n✅ Dataset de espermatozoides generado correctamente.")
-    print(f"📁 Ubicación: {RUTA_SALIDA}")
+                _, mascara = procesar(img)
+
+                if mascara is None:
+                    continue
+
+                ruta_salida = os.path.join(salida_clase, nombre)
+                cv2.imwrite(ruta_salida, mascara)
+
+    print("\nDataset de espermatozoides generado correctamente.")
+    for nombre_tipo, _ in PROCESADORES:
+        print(f"Ubicación ({nombre_tipo}): {os.path.join(RUTA_SALIDA_BASE, nombre_tipo)}")
