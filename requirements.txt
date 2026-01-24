@@ -5,3 +5,9 @@ kagglehub
 mahotas
 pandas
 scikit-image
+torch 
+torchvision 
+scikit-learn 
+umap-learn 
+pillow 
+matplotlib
