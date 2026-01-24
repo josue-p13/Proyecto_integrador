@@ -1,0 +1,10 @@
+numpy
+opencv-python
+tqdm
+kagglehub
+mahotas
+pandas
+scikit-image
+torch
+torchvision
+pillow

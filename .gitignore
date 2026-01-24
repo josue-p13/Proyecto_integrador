@@ -1,0 +1,50 @@
+# Datos procesados y caracteristicas extraidas
+datos_procesados/
+caracteristicas_extraidas/
+
+# Datasets descargados (kagglehub)
+*.csv
+*.png
+*.jpg
+*.jpeg
+*.bmp
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+*.ipynb
+
+# Entornos virtuales
+.venv/
+venv/
+ENV/
+env/
+
+# VS Code
+.vscode/
+!.vscode/settings.json
+
+# PyCharm
+.idea/
+
+# SO
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
