@@ -1,6 +1,7 @@
 # Datos procesados y caracteristicas extraidas
 datos_procesados/
 caracteristicas_extraidas/
+embeddings/
 
 # Datasets descargados (kagglehub)
 *.csv
