@@ -7,10 +7,8 @@ import pandas as pd
 from src.extraccion_caracteristicas.momentos.momentos import calcular_momentos
 from src.extraccion_caracteristicas.momentos.hu import calcular_hu_momentos
 from src.extraccion_caracteristicas.momentos.zernike import calcular_zernike_momentos
-from src.extraccion_caracteristicas.momentos.binarizacion import binarizar_imagen
 from src.extraccion_caracteristicas.SIFT.SIFT import crear_sift, extraer_descriptores_imagen, resumir_descriptores
 from src.extraccion_caracteristicas.HOG.HOG import extraer_hog_imagen
-
 
 
 def escalar_logaritmicamente(datos):
@@ -39,60 +37,13 @@ def escalar_logaritmicamente(datos):
     return datos_escalados
 
 
-def binarizar_dataset(ruta_imagenes, ruta_salida_bin, nombre_dataset):
-    """
-    Binariza todas las imagenes de un dataset y las guarda.
-    
-    Lee imagenes procesadas, aplica binarizacion de Otsu y guarda
-    las imagenes binarizadas manteniendo la estructura de carpetas.
-    
-    Parametros:
-        ruta_imagenes: Ruta donde estan las carpetas con imagenes por clase
-        ruta_salida_bin: Ruta donde se guardaran las imagenes binarizadas
-        nombre_dataset: Nombre del dataset para mensajes
-    """
-    clases = [d for d in os.listdir(ruta_imagenes) 
-              if os.path.isdir(os.path.join(ruta_imagenes, d))]
-    
-    if not clases:
-        print(f"No se encontraron clases en {ruta_imagenes}")
-        return
-    
-    print(f"Binarizando {nombre_dataset}...")
-    print(f"Clases: {clases}")
-    
-    for clase in clases:
-        ruta_clase_in = os.path.join(ruta_imagenes, clase)
-        ruta_clase_out = os.path.join(ruta_salida_bin, clase)
-        os.makedirs(ruta_clase_out, exist_ok=True)
-        
-        archivos = [f for f in os.listdir(ruta_clase_in) 
-                   if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
-        
-        print(f"\nBinarizando clase: {clase} ({len(archivos)} imagenes)")
-        
-        for archivo in tqdm(archivos):
-            ruta_img = os.path.join(ruta_clase_in, archivo)
-            img = cv2.imread(ruta_img)
-            
-            if img is None:
-                continue
-            
-            img_bin = binarizar_imagen(img, metodo='otsu')
-            
-            if img_bin is not None:
-                ruta_salida = os.path.join(ruta_clase_out, archivo)
-                cv2.imwrite(ruta_salida, img_bin)
-    
-    print(f"Binarizacion completada. Guardado en: {os.path.abspath(ruta_salida_bin)}")
-
-
 def extraer_caracteristicas_dataset(ruta_imagenes_bin, ruta_salida_csv, nombre_dataset):
     """
     Extrae momentos, Hu y Zernike de imagenes binarizadas.
     
-    Lee imagenes binarizadas, calcula los tres tipos de momentos
-    aplicando escala logaritmica y guarda los resultados en CSV.
+    Lee imagenes binarizadas generadas por generar_dataset_espermatozoides
+    o generar_dataset_rps, calcula los tres tipos de momentos aplicando
+    escala logaritmica y guarda los resultados en CSV.
     
     Parametros:
         ruta_imagenes_bin: Ruta donde estan las imagenes binarizadas
@@ -170,147 +121,124 @@ def extraer_caracteristicas_dataset(ruta_imagenes_bin, ruta_salida_csv, nombre_d
     
     print(f"\nExtraccion completada para {nombre_dataset}")
     print(f"Archivos guardados en: {os.path.abspath(ruta_salida_csv)}")
+
+
+def guardar_dataset_sift_csv(ruta_imagenes, ruta_csv, nombre_dataset):
+    """Extrae descriptores SIFT de las imagenes y los guarda en CSV"""
+    os.makedirs(os.path.dirname(ruta_csv), exist_ok=True)
     
-
-def guardar_dataset_sift_csv(ruta_dataset, archivo_csv, hessian_threshold=400):
-    sift = crear_sift(hessian_threshold)
-
-    filas = []
-
-    clases = [
-        c for c in os.listdir(ruta_dataset)
-        if os.path.isdir(os.path.join(ruta_dataset, c))
-    ]
-
-    for clase in tqdm(clases, desc="Procesando clases"):
-        ruta_clase = os.path.join(ruta_dataset, clase)
-
-        imagenes = [
-            img for img in os.listdir(ruta_clase)
-            if img.lower().endswith(('.jpg', '.png', '.jpeg', '.bmp'))
-        ]
-
-        for imagen in tqdm(imagenes, desc=f"Clase: {clase}", leave=False):
-            ruta_imagen = os.path.join(ruta_clase, imagen)
-
-            try:
-                descriptores = extraer_descriptores_imagen(
-                    ruta_imagen, sift
-                )
-
-                vector = resumir_descriptores(descriptores)
-                fila = list(vector) + [clase]
-                filas.append(fila)
-
-            except Exception as e:
-                print(e)
-
-    columnas = [f"f{i}" for i in range(len(filas[0]) - 1)] + ["label"]
-    df = pd.DataFrame(filas, columns=columnas)
-
-    # ✅ CREAR DIRECTORIO SI NO EXISTE
-    directorio_salida = os.path.dirname(archivo_csv)
-    if directorio_salida:
-        os.makedirs(directorio_salida, exist_ok=True)
-
-    # Guardar CSV
-    df.to_csv(archivo_csv + ".csv", index=False)
-    print(f"\nDataset guardado en {archivo_csv}.csv")
+    sift = crear_sift()
+    datos = []
+    clases = [d for d in os.listdir(ruta_imagenes) if os.path.isdir(os.path.join(ruta_imagenes, d))]
+    
+    print(f"\nExtrayendo descriptores SIFT de {nombre_dataset}...")
+    
+    for clase in clases:
+        ruta_clase = os.path.join(ruta_imagenes, clase)
+        archivos = [f for f in os.listdir(ruta_clase) 
+                    if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
+        
+        print(f"Procesando clase: {clase} ({len(archivos)} imagenes)")
+        
+        for archivo in tqdm(archivos):
+            ruta_img = os.path.join(ruta_clase, archivo)
+            
+            descriptores = extraer_descriptores_imagen(ruta_img, sift)
+            if descriptores is not None:
+                resumen = resumir_descriptores(descriptores)
+                fila = {f'sift_{i}': val for i, val in enumerate(resumen)}
+                fila['clase'] = clase
+                fila['archivo'] = archivo
+                datos.append(fila)
+    
+    if datos:
+        df = pd.DataFrame(datos)
+        df.to_csv(ruta_csv, index=False, encoding='utf-8')
+        print(f"\n{len(datos)} filas guardadas en {ruta_csv}")
 
 
-def guardar_dataset_hog_csv(
-    ruta_dataset,
-    archivo_csv,
-    resize=(128, 64)
-):
-    filas = []
+def guardar_dataset_hog_csv(ruta_imagenes, ruta_csv, nombre_dataset):
+    """Extrae descriptores HOG de las imagenes y los guarda en CSV"""
+    os.makedirs(os.path.dirname(ruta_csv), exist_ok=True)
+    
+    datos = []
+    clases = [d for d in os.listdir(ruta_imagenes) if os.path.isdir(os.path.join(ruta_imagenes, d))]
+    
+    print(f"\nExtrayendo descriptores HOG de {nombre_dataset}...")
+    
+    for clase in clases:
+        ruta_clase = os.path.join(ruta_imagenes, clase)
+        archivos = [f for f in os.listdir(ruta_clase) 
+                    if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp'))]
+        
+        print(f"Procesando clase: {clase} ({len(archivos)} imagenes)")
+        
+        for archivo in tqdm(archivos):
+            ruta_img = os.path.join(ruta_clase, archivo)
+            
+            hog_desc = extraer_hog_imagen(ruta_img)
+            if hog_desc is not None:
+                fila = {f'hog_{i}': val for i, val in enumerate(hog_desc)}
+                fila['clase'] = clase
+                fila['archivo'] = archivo
+                datos.append(fila)
+    
+    if datos:
+        df = pd.DataFrame(datos)
+        df.to_csv(ruta_csv, index=False, encoding='utf-8')
+        print(f"\n{len(datos)} filas guardadas en {ruta_csv}")
 
-    clases = [
-        c for c in os.listdir(ruta_dataset)
-        if os.path.isdir(os.path.join(ruta_dataset, c))
-    ]
-
-    for clase in tqdm(clases, desc="Procesando clases"):
-        ruta_clase = os.path.join(ruta_dataset, clase)
-
-        imagenes = [
-            img for img in os.listdir(ruta_clase)
-            if img.lower().endswith(('.jpg', '.png', '.jpeg', '.bmp'))
-        ]
-
-        for imagen in tqdm(imagenes, desc=f"Clase: {clase}", leave=False):
-            ruta_imagen = os.path.join(ruta_clase, imagen)
-
-            try:
-                vector = extraer_hog_imagen(ruta_imagen, resize)
-                fila = list(vector) + [clase]
-                filas.append(fila)
-
-            except Exception as e:
-                print(e)
-
-    columnas = [f"f{i}" for i in range(len(filas[0]) - 1)] + ["label"]
-    df = pd.DataFrame(filas, columns=columnas)
-
-    # Crear directorio si no existe
-    directorio_salida = os.path.dirname(archivo_csv)
-    if directorio_salida:
-        os.makedirs(directorio_salida, exist_ok=True)
-
-    df.to_csv(archivo_csv + ".csv", index=False)
-    print(f"\nDataset HOG guardado en {archivo_csv}.csv")
 
 def extraer_todas_caracteristicas():
     """
     Funcion principal que extrae caracteristicas de ambos datasets.
     
-    Primero binariza las imagenes procesadas y las guarda.
-    Luego extrae momentos, Hu y Zernike de las imagenes binarizadas
-    aplicando escala logaritmica antes de guardar en CSV.
+    Usa las imagenes binarizadas generadas por generar_dataset_espermatozoides
+    y generar_dataset_rps, extrae momentos, Hu y Zernike aplicando
+    escala logaritmica y guarda los resultados en CSV.
     """
-    print("\n--- PASO 1: BINARIZANDO IMAGENES ---")
+    print("\n--- EXTRAYENDO CARACTERISTICAS DE IMAGENES BINARIZADAS ---")
     
-    binarizar_dataset(
-        ruta_imagenes="datos_procesados/espermatozoides",
-        ruta_salida_bin="caracteristicas_extraidas/momentos/binarizacion/espermatozoides",
-        nombre_dataset="espermatozoides"
-    )
-    
-    binarizar_dataset(
-        ruta_imagenes="datos_procesados/piedra_papel_tijera",
-        ruta_salida_bin="caracteristicas_extraidas/momentos/binarizacion/piedra_papel_tijera",
-        nombre_dataset="piedra-papel-tijera"
-    )
-    
-    print("\n--- PASO 2: EXTRAYENDO CARACTERISTICAS ---")
-    
+    # Momentos de imagenes binarizadas
     extraer_caracteristicas_dataset(
-        ruta_imagenes_bin="caracteristicas_extraidas/momentos/binarizacion/espermatozoides",
+        ruta_imagenes_bin="datos_procesados/espermatozoides_binarizados",
         ruta_salida_csv="caracteristicas_extraidas/momentos/espermatozoides",
         nombre_dataset="espermatozoides"
     )
     
     extraer_caracteristicas_dataset(
-        ruta_imagenes_bin="caracteristicas_extraidas/momentos/binarizacion/piedra_papel_tijera",
+        ruta_imagenes_bin="datos_procesados/piedra_papel_tijera_binarizados",
         ruta_salida_csv="caracteristicas_extraidas/momentos/piedra_papel_tijera",
         nombre_dataset="piedra-papel-tijera"
     )
+    
+    # SIFT y HOG de imagenes en escala de grises
+    print("\n--- EXTRAYENDO SIFT Y HOG ---")
+    
     guardar_dataset_sift_csv(
-        ruta_dataset="datos_procesados/espermatozoides",
-        archivo_csv="caracteristicas_extraidas/sift/espermatozoides-sift",
+        ruta_imagenes="datos_procesados/espermatozoides",
+        ruta_csv="caracteristicas_extraidas/sift/espermatozoides/sift.csv",
+        nombre_dataset="espermatozoides"
     )
+    
     guardar_dataset_sift_csv(
-        ruta_dataset="datos_procesados/piedra_papel_tijera",
-        archivo_csv="caracteristicas_extraidas/sift/piedra-papel-tijera-sift",
+        ruta_imagenes="datos_procesados/piedra_papel_tijera",
+        ruta_csv="caracteristicas_extraidas/sift/piedra_papel_tijera/sift.csv",
+        nombre_dataset="piedra-papel-tijera"
     )
+    
     guardar_dataset_hog_csv(
-        ruta_dataset="datos_procesados/espermatozoides",
-        archivo_csv="caracteristicas_extraidas/hog/espermatozoides-hog"
+        ruta_imagenes="datos_procesados/espermatozoides",
+        ruta_csv="caracteristicas_extraidas/hog/espermatozoides/hog.csv",
+        nombre_dataset="espermatozoides"
+    )
+    
+    guardar_dataset_hog_csv(
+        ruta_imagenes="datos_procesados/piedra_papel_tijera",
+        ruta_csv="caracteristicas_extraidas/hog/piedra_papel_tijera/hog.csv",
+        nombre_dataset="piedra-papel-tijera"
     )
 
-    guardar_dataset_hog_csv(
-        ruta_dataset="datos_procesados/piedra_papel_tijera",
-        archivo_csv="caracteristicas_extraidas/hog/piedra-papel-tijera-hog"
-    )
+
 if __name__ == "__main__":
     extraer_todas_caracteristicas()
